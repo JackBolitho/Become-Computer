@@ -25,17 +25,19 @@ public class ComputerController : MonoBehaviour
 
     //deals with program
     [SerializeField] TextMeshPro programText;
+    [SerializeField] TextMeshPro printText;
     [SerializeField] float instructionTimeDelay;
     [SerializeField] private int instructionPointer = 0;
-    private List<(int, int[],List<int>, List<GameObject>)> tapeHistory = new List<(int, int[], List<int>, List<GameObject>)>(); //a stack that stores the tape state at the start of running a while loop
-    private Dictionary<int, (int, int[], List<int>, List<GameObject>)> startLoopHistory = new Dictionary<int, (int, int[], List<int>, List<GameObject>)>(); //stores the state at outer [
+    private List<(int, int[], string)> tapeHistory = new List<(int, int[], string)>(); //a stack that stores the tape state at the start of running a while loop
+    private Dictionary<int, (int, int[], string)> startLoopHistory = new Dictionary<int, (int, int[], string)>(); //stores the state at outer [
     private int unpairedLoopCount = 0;
     private Dictionary<int,int> startToEnd = new Dictionary<int,int>();
     private Dictionary<int,int> endToStart = new Dictionary<int,int>();
     private string program = "";
+    private string printedNums = "";
 
     //fibonacci numbers:  .>+.>+[-<<[>>+<<-]>[>+<<+>-]>[<+>-]<.>+]
-    
+
     //deals with movement
     [SerializeField] private float moveAnimationDuration;
     private Vector3 startPos;
@@ -43,11 +45,6 @@ public class ComputerController : MonoBehaviour
     private float elapsedTime;
     private bool isLerping = false;
     [SerializeField] private Animator machineAnimator;
-
-    //level integration
-    private List<int> printedValues = new List<int>();
-    private List<GameObject> printedNums = new List<GameObject>();
-    private List<GameObject> recentPrintedNums = new List<GameObject>();
 
     //puzzle setup
     [SerializeField] private PuzzleSetups puzzle;
@@ -145,14 +142,46 @@ public class ComputerController : MonoBehaviour
     //take an array of tape values the size of the tape, and replaces the tape with those values
     private void UndoTapeHistory()
     {
-        if(tapeHistory.Count > 0)
-        {
-            int tapePointerVal = tapeHistory[tapeHistory.Count-1].Item1;
-            int[] tapeVals = tapeHistory[tapeHistory.Count-1].Item2;
-            List<int> printedVals = tapeHistory[tapeHistory.Count-1].Item3;
-            List<GameObject> nextRecentPrintedObjs = tapeHistory[tapeHistory.Count-1].Item4;
+        Debug.Log(tapeHistory.Count);
 
-            tapeHistory.RemoveAt(tapeHistory.Count-1);
+        if (tapeHistory.Count > 0)
+        {
+            int tapePointerVal = tapeHistory[tapeHistory.Count - 1].Item1;
+            int[] tapeVals = tapeHistory[tapeHistory.Count - 1].Item2;
+            string printedNumsInHistory = tapeHistory[tapeHistory.Count - 1].Item3;
+
+            tapeHistory.RemoveAt(tapeHistory.Count - 1);
+
+            //assign tape vals
+            for (int i = 0; i < tapeNumberArray.Length; i++)
+            {
+                tapeValues = tapeVals;
+                tapeNumberArray[i].GetComponent<TextMeshPro>().text = tapeVals[i].ToString();
+            }
+
+            //set printed text
+            printedNums = printedNumsInHistory;
+            printText.text = printedNums;
+
+            MovePointerToPosition(tapePointerVal);
+        }
+    }
+
+    private void SaveStartLoopHistory(int index)
+    {
+        int[] newArray = new int[tapeValues.Length];
+        tapeValues.CopyTo(newArray, 0);
+        (int, int[], string) historyPair = (tapePointer, newArray, printedNums);
+        startLoopHistory.Add(index, historyPair);
+    }
+
+    private void LoadStartLoopHistory(int index)
+    {
+        if(startLoopHistory.ContainsKey(index))
+        {
+            int tapePointerVal = startLoopHistory[index].Item1;
+            int[] tapeVals = startLoopHistory[index].Item2;
+            string printedNumsInHistory = startLoopHistory[index].Item3;
 
             //assign tape vals
             for(int i = 0; i < tapeNumberArray.Length; i++)
@@ -161,43 +190,12 @@ public class ComputerController : MonoBehaviour
                 tapeNumberArray[i].GetComponent<TextMeshPro>().text = tapeVals[i].ToString();
             }
 
-            //remove recently printed objects
-            for(int i = recentPrintedNums.Count-1; i >= 0; i--){
-                Destroy(recentPrintedNums[i]);
-                printedNums.Remove(recentPrintedNums[i]);
-            }
-
-            recentPrintedNums = nextRecentPrintedObjs;
-            printedValues = printedVals;
-
+            //set printed text
+            printedNums = printedNumsInHistory;
+            printText.text = printedNums;
+            
             MovePointerToPosition(tapePointerVal);
-            MoveAllPrintedNums();
         }
-    }
-
-    private void SaveStartLoopHistory(int index)
-    {
-        int[] newArray = new int[tapeValues.Length];
-        tapeValues.CopyTo(newArray, 0);
-        (int, int[], List<int>, List<GameObject>) historyPair = (tapePointer, newArray, new List<int>(printedValues), new List<GameObject>(recentPrintedNums));
-        startLoopHistory.Add(index, historyPair);
-    }
-
-    private void LoadStartLoopHistory(int index)
-    {
-        
-    }
-
-    //deletes a printed number and cleans up
-    private void UndoPrint()
-    {
-        GameObject num = printedNums[printedNums.Count - 1];
-        printedValues.RemoveAt(printedValues.Count - 1);
-        recentPrintedNums.Remove(num);
-        printedNums.RemoveAt(printedNums.Count - 1);
-        Destroy(num);
-
-        MoveAllPrintedNums();
     }
 
     //save the current values in the tape, and put them in the tape history
@@ -205,9 +203,9 @@ public class ComputerController : MonoBehaviour
     {
         int[] newArray = new int[tapeValues.Length];
         tapeValues.CopyTo(newArray, 0);
-        (int, int[], List<int>, List<GameObject>) historyPair = (tapePointer, newArray, new List<int>(printedValues), new List<GameObject>(recentPrintedNums));
-        recentPrintedNums.Clear();
+        (int, int[], string) historyPair = (tapePointer, newArray, printedNums);
         tapeHistory.Add(historyPair);
+        Debug.Log(tapeHistory.Count + "YO");
     }
 
     //move the tape pointer to a specific location on the tape, and move all tape gameobjects accordingly
@@ -335,42 +333,16 @@ public class ComputerController : MonoBehaviour
     private void PrintToScreen()
     {
         int printedValue = tapeValues[tapePointer];
-
-        GameObject printedNum = Instantiate(tapeNumber);
-        printedNums.Add(printedNum);
-        recentPrintedNums.Add(printedNum);
-        printedValues.Add(printedValue);
-
-        printedNum.GetComponent<TextMeshPro>().text = printedValue.ToString();
-        printedNum.transform.position = centerPosition;
-        MoveAllPrintedNums();
+        printedNums += printedValue.ToString() + " ";
+        printText.text = printedNums;
     }
 
-    private void MoveAllPrintedNums()
-    {
-        Vector3 originPos = printPosition - new Vector3(tapeNumberSpacing/2 * (printedNums.Count-1), 0, 0);
-        for(int i = 0; i < printedNums.Count; i++)
-        {
-            printedNums[i].transform.position = originPos + new Vector3(tapeNumberSpacing * i, 0, 0);
-        }
-    }
     
     //verifies whether or not the printed numbers are equal to the puzzle solution
     private bool CheckPuzzleCorrectness()
     {
-        if (goalValues.Length != printedValues.Count)
-        {
-            return false;
-        }
-
-        for (int i = 0; i < goalValues.Length; i++)
-        {
-            if (goalValues[i] != printedValues[i])
-            {
-                return false;
-            }
-        }
-        return true;
+        //TODO FIX
+        return false;
     }
 
     private void SetStartLoop(InputAction.CallbackContext context)
@@ -378,6 +350,11 @@ public class ComputerController : MonoBehaviour
         if (playerCanMove)
         {
             WriteToProgram("[");
+            if (unpairedLoopCount == 0)
+            {
+                Debug.Log(instructionPointer);
+                SaveStartLoopHistory(instructionPointer);
+            }
             instructionPointer++;
             unpairedLoopCount++;
         }
@@ -403,7 +380,9 @@ public class ComputerController : MonoBehaviour
                 }
 
                 WriteToProgram("]");
-
+                SaveTapeValues();
+                Debug.Log(pairIndex);
+                LoadStartLoopHistory(pairIndex);
                 StartCoroutine("ParseProgram");
             }
             else{
@@ -437,6 +416,7 @@ public class ComputerController : MonoBehaviour
                     break;
                 case '[':
                     instructionPointer = program.Length-1;
+                    startLoopHistory.Remove(instructionPointer);
                     unpairedLoopCount--;
                     break;
                 case ']':
@@ -455,7 +435,16 @@ public class ComputerController : MonoBehaviour
                     }
                     break;
                 case '.':
-                    UndoPrint();
+                    //remove from string until string is empty or a space is encountered
+                    if (printedNums.Length > 0)
+                    {
+                        printedNums = printedNums.Substring(0, printedNums.Length - 1);
+                    }
+                    while (printedNums.Length > 0 && printedNums[printedNums.Length - 1] != ' ')
+                    {
+                        printedNums = printedNums.Substring(0, printedNums.Length - 1);
+                    }
+                    printText.text = printedNums;
                     instructionPointer--;
                     break;
                 default:
@@ -566,7 +555,6 @@ public class ComputerController : MonoBehaviour
     private IEnumerator ParseProgram()
     {
         playerCanMove = false;
-        SaveTapeValues();
 
         while (instructionPointer < program.Length)
         {
